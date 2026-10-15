@@ -191,7 +191,7 @@ function operations(m,f){
  const t=m.returns.filter(r=>base(r,f)&&(!f.product||r.product===f.product));
  const groups=new Map();
  for(const [kind,rows]of [['board',b],['return',t]])for(const r of rows){const key=[r.date,r.salesman,r.route,r.product].join('|');if(!groups.has(key))groups.set(key,{date:r.date,salesman:r.salesman,route:r.route,product:r.product,name:r.productName,board:[],return:[]});groups.get(key)[kind].push(r);}
- return [...groups.values()].map(g=>({...g,loaded:g.board.length?sum(g.board,'QTY'):null,good:g.return.length?sum(g.return,'GOOD'):null,damage:g.return.length?sum(g.return,'DMG'):null,expiry:g.return.length?sum(g.return,'EXP'):null,foc:g.return.length?sum(g.return,'FOC'):null,status:g.board.length&&g.return.length?'Matched date/name/route/barcode':g.board.length?'No return row':'No loading row'}));
+ return [...groups.values()].map(g=>({...g,loaded:g.board.length?sum(g.board,'QTY'):null,good:g.return.length?sum(g.return,'GOOD'):null,damage:g.return.length?sum(g.return,'DMG'):null,expiry:g.return.length?sum(g.return,'EXP'):null,waste:g.return.length?sum(g.return,'WST'):null,foc:g.return.length?sum(g.return,'FOC'):null,status:g.board.length&&g.return.length?'Matched date/name/route/barcode':g.board.length?'No return row':'No loading row'}));
 }
 root.MahrjanCore={prepare,filter,stats,aggregate,operations,base,sum,num,text,unique};
 })(typeof window==='undefined'?globalThis:window);
@@ -275,7 +275,7 @@ window.MobileReport = {fmtDate(v){return new Date(v+'T00:00:00').toLocaleDateStr
           let end = i + 1;
           while (end < rows.length && rows[end].slice(x - 1, y).some(v => !empty(v))) end++;
           for (let k = i; k < end; k++) used[k] = true;
-          let html = '<table><tr class="h">' + rows[i].slice(x - 1, y).map(v => '<td>' + esc(v) + '</td>').join('') + '</tr>';
+          let html = '<table><tr class="h">' + rows[i].slice(x - 1, y).map(v => '<td' + (d.name === 'PICKING SHEET' && String(v).trim() === 'ITEM' ? ' style="text-align:left"' : '') + '>' + esc(v) + '</td>').join('') + '</tr>';
           for (let k = i + 1; k < end; k++) {
             const bold = (d.name !== 'SALESMAN SUMMARY' && (d.bold || []).includes(k)) || rows[k].slice(x - 1, y).some(v => /^(TOTAL|CLOSING|CASH TO HAND OVER|CASH IN HAND)/i.test(String(v).trim()));
             const lab = String(rows[k][x - 1] || '').trim(), trCls = (/^CASH COLLECTION$/i.test(lab) ? 'bt2 ' : '') + (/^CASH TO HAND OVER$/i.test(lab) ? 'big ' : '') + (/^(CHEQUES TO HAND OVER|CREDIT SALES \(NET OF GRV\))$/i.test(lab) ? 'dim' : '');
@@ -513,7 +513,7 @@ function buildTable(rows,collections,expenses,collectionBlocked,expenseBlocked){
  }else if(view==='vanlog'){
  tableRows=vanRows();columns=[col('date','Date'),col('salesman','Salesman'),col('route','Route'),col('vehicle','Vehicle'),col('loadTime','Loading time'),col('unloadTime','Unloading time'),col('hours','Hours out','number'),col('loadTemp','Loading temp °C','number'),col('unloadTemp','Unloading temp °C','number'),col('startKm','Start KM','number'),col('endKm','End KM','number'),col('km','KM driven','number'),col('status','Status')];title='Van log';note='One row per VAN LOG entry. Hours out = unloading time less loading time. KM driven shows only when both start and end KM are recorded.';
  }else if(view==='operations'){
- tableRows=C.operations(M,f);columns=[col('date','Date'),col('salesman','Salesman'),col('route','Route'),col('product','Barcode'),col('name','Product'),col('loaded','Loaded','number'),col('good','Good return','number'),col('damage','Damage','number'),col('expiry','Expiry','number'),col('foc','FOC','number'),col('status','Link status')];title='Loading & physical return';note=f.customer||f.tender?'Not available for customer or tender filters. Clear these filters.':'Matched by date + operational name + route + barcode. A dash means no source row. Source quantities have no declared unit; no sales-to-stock variance is calculated.';
+ tableRows=C.operations(M,f);columns=[col('date','Date'),col('salesman','Salesman'),col('route','Route'),col('product','Barcode'),col('name','Product'),col('loaded','Loaded','number'),col('good','Good return','number'),col('damage','Damage','number'),col('expiry','Expiry','number'),col('waste','Waste','number'),col('foc','FOC','number'),col('status','Link status')];title='Loading & physical return';note=f.customer||f.tender?'Not available for customer or tender filters. Clear these filters.':'Matched by date + operational name + route + barcode. A dash means no source row. Source quantities have no declared unit; no sales-to-stock variance is calculated.';
  }
  $('tableTitle').textContent=title;$('tableNote').textContent=note;
  const sig=view+'|'+columns.map(c=>c.key).join(',');if(sig!==signature){signature=sig;visible=new Set(columns.map(c=>c.key));sortKey='';sortDir=1;}
