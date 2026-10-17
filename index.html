@@ -232,7 +232,7 @@ window.MobileReport = {fmtDate(v){return new Date(v+'T00:00:00').toLocaleDateStr
     // numbers, invoice numbers and barcodes print centred and bold
     const TEXT = ['HEAD NO', 'CUSTOMER', 'ITEM', 'TYPE', 'PARTICULARS', 'NAME', 'SALESMAN'];
     const td = (v, k, bold, hd) => {
-      if (TEXT.indexOf(String(hd || '').toUpperCase()) > -1) return '<td class="' + (bold ? 'b' : '') + '">' + esc(v) + '</td>';
+      if (TEXT.indexOf(String(hd || '').toUpperCase()) > -1) return '<td class="l' + (bold ? ' b' : '') + '">' + esc(v) + '</td>';
       if (typeof v === 'number') return '<td class="n' + (bold ? ' b' : '') + '">' + (money.includes(k) ? f2(v) : String(v)) + '</td>';
       const t = String(v == null ? '' : v);
       const numLike = /^-?[0-9][0-9 ,.]*$/.test(t.trim()) || t.trim() === 'NIL';
@@ -275,7 +275,14 @@ window.MobileReport = {fmtDate(v){return new Date(v+'T00:00:00').toLocaleDateStr
           let end = i + 1;
           while (end < rows.length && rows[end].slice(x - 1, y).some(v => !empty(v))) end++;
           for (let k = i; k < end; k++) used[k] = true;
-          let html = '<table><tr class="h">' + rows[i].slice(x - 1, y).map(v => '<td' + (d.name === 'PICKING SHEET' && String(v).trim() === 'ITEM' ? ' style="text-align:left"' : '') + '>' + esc(v) + '</td>').join('') + '</tr>';
+          // Empty cartons: a compact 3-column box — item left, salesman count and received box centred.
+          if (String(rows[i][x - 1] || '').trim().toUpperCase() === 'EMPTY CARTONS') {
+            let h = '<table style="width:120mm;margin-top:2mm;table-layout:fixed"><colgroup><col style="width:48mm"><col style="width:36mm"><col style="width:36mm"></colgroup>'
+              + '<tr class="h">' + rows[i].slice(x - 1, y).map((v, j) => '<td style="text-align:' + (j === 0 ? 'left' : 'center') + '">' + esc(v) + '</td>').join('') + '</tr>';
+            for (let k = i + 1; k < end; k++) h += '<tr>' + rows[k].slice(x - 1, y).map((v, j) => '<td style="text-align:' + (j === 0 ? 'left' : 'center') + (j === 2 ? ';border-left:1px solid #c9cfcb' : '') + '"' + (j > 0 ? ' class="n"' : '') + '>' + esc(String(v == null ? '' : v).trim()) + '</td>').join('') + '</tr>';
+            return { html: h + '</table>', span: y - x + 1 };
+          }
+          let html = '<table><tr class="h">' + rows[i].slice(x - 1, y).map(v => '<td' + (TEXT.indexOf(String(v).trim().toUpperCase()) > -1 ? ' class="l"' : '') + '>' + esc(v) + '</td>').join('') + '</tr>';
           for (let k = i + 1; k < end; k++) {
             const bold = (d.name !== 'SALESMAN SUMMARY' && (d.bold || []).includes(k)) || rows[k].slice(x - 1, y).some(v => /^(TOTAL|CLOSING|CASH TO HAND OVER|CASH IN HAND)/i.test(String(v).trim()));
             const lab = String(rows[k][x - 1] || '').trim(), trCls = (/^CASH COLLECTION$/i.test(lab) ? 'bt2 ' : '') + (/^CASH TO HAND OVER$/i.test(lab) ? 'big ' : '') + (/^(CHEQUES TO HAND OVER|CREDIT SALES \(NET OF GRV\))$/i.test(lab) ? 'dim' : '');
@@ -332,7 +339,7 @@ window.MobileReport = {fmtDate(v){return new Date(v+'T00:00:00').toLocaleDateStr
       + '@page{size:A4 landscape;margin:0}.sheet{box-sizing:border-box;width:297mm;height:209mm;padding:5mm 8mm;overflow:hidden}.sheet+.sheet{break-before:page;page-break-before:always}'
       + 'body{font:11pt Economica,Arial,sans-serif;color:#000;margin:0}'
       + '.top{display:flex;align-items:center;gap:5mm;border-bottom:2px solid #0d4a28;padding-bottom:2mm;margin-bottom:1.5mm}'
-      + '.top img{height:14mm;border-radius:1.5mm}.t{font:700 16pt Economica,Arial,sans-serif;color:#0d4a28}.s{margin-left:auto;font-weight:700;font-size:12pt;text-align:right}.ctr td{text-align:center!important}.t{white-space:nowrap;flex:none;line-height:1.15}.mid{margin:0 auto;display:grid;grid-template-columns:repeat(3,auto);column-gap:5mm;row-gap:1.2mm;font-size:10pt}.mid div{display:flex;gap:2mm;align-items:baseline}.mid b{font-weight:700;color:#3a433d}.mid span{min-width:16mm;border-bottom:1px solid #9aa29d;text-align:center;padding:0 1mm}.s .v{font-size:11pt;margin-top:.6mm}'
+      + '.top img{height:14mm;border-radius:1.5mm}.t{font:700 16pt Economica,Arial,sans-serif;color:#0d4a28}.s{margin-left:auto;font-weight:700;font-size:12pt;text-align:right}.ctr td:not(.l){text-align:center!important}td.l,tr.h td.l{text-align:left}.t{white-space:nowrap;flex:none;line-height:1.15}.mid{margin:0 auto;display:grid;grid-template-columns:repeat(3,auto);column-gap:5mm;row-gap:1.2mm;font-size:10pt}.mid div{display:flex;gap:2mm;align-items:baseline}.mid b{font-weight:700;color:#3a433d}.mid span{min-width:16mm;border-bottom:1px solid #9aa29d;text-align:center;padding:0 1mm}.s .v{font-size:11pt;margin-top:.6mm}'
       + 'table{border-collapse:collapse;width:100%}td{padding:.8mm 1.4mm;border-bottom:1px solid #c9cfcb;white-space:nowrap;color:#000}'
       + 'td.n{text-align:center;font:400 11.5pt Economica,Arial,sans-serif;font-variant-numeric:tabular-nums}td.b{font-weight:700}'
       + 'tr.h td{background:#e7efe9;font-weight:700;text-align:center;border-top:1px solid #000;border-bottom:1px solid #000}'
@@ -370,7 +377,7 @@ window.MobileReport = {fmtDate(v){return new Date(v+'T00:00:00').toLocaleDateStr
  function draw(){
    const h=getHost();const dates=[...new Set([...(MAHRJAN_DATA['RAW SALES']||[]).map(r=>r['Tran Date']),...(MAHRJAN_DATA.BOARD||[]).map(r=>r['BOARD DATE']),...(MAHRJAN_DATA.COLLECTION||[]).map(r=>r['COLLECTION DATE']||r.DATE),...(MAHRJAN_DATA.EXPENSE||[]).map(r=>r['EXPENSE DATE']),...(MAHRJAN_DATA.meta.live?[MAHRJAN_DATA.meta.snapshotDate]:[])])].filter(v=>/^\d{4}-\d{2}-\d{2}$/.test(v)).sort().reverse();if(!day)day=dates[0]||localToday();
    h.innerHTML='<div class="report-type-tabs">'+Object.keys(labels).map(n=>'<button data-type="'+n+'" class="'+(type===n?'primary':'')+'">'+labels[n]+'</button>').join('')+'</div><div class="panel report-filters"'+((type==='CASH SHEET'||type==='MONTHLY CLOSING'||type==='PICKING SHEET')?' style="grid-template-columns:minmax(0,200px) auto"':'')+'>'+((type==='CASH SHEET'||type==='MONTHLY CLOSING'||type==='PICKING SHEET')?'':'<label>Salesman<select id="reportSalesman"><option value="">Select salesman</option>'+MAHRJAN_DATA.roster.map(r=>'<option '+(r.name===man?'selected':'')+' value="'+e(r.name)+'">'+e(r.name)+'</option>').join('')+'</select></label>')+'<label>'+(type==='PICKING SHEET'?'Required for':'Date')+'<input id="reportDate" type="date" value="'+e(day)+'"'+(type==='PICKING SHEET'?'':' max="'+localToday()+'"')+'></label><button id="showMobileReport" class="primary" '+(busy||!day||(!(type==='CASH SHEET'||type==='MONTHLY CLOSING'||type==='PICKING SHEET')&&!man)?'disabled':'')+'>'+(busy?'Building report…':'Show Report')+'</button></div><div id="mobileReportResult" class="panel">'+(busy?'<p role="status">Building your report…</p>':selected?'<div class="section-head"><h2>'+e(labels[selected.name])+' · '+e(day)+(!(type==='CASH SHEET'||type==='MONTHLY CLOSING'||type==='PICKING SHEET')?' · '+e(man):'')+'</h2><div class="saved-actions"><button id="mobileCsv">CSV</button><button id="mobileExcel">Excel</button><button id="mobilePrint" class="primary">Print A4</button></div></div>'+table(selected):'<p>'+((type==='CASH SHEET'||type==='MONTHLY CLOSING'||type==='PICKING SHEET')?'Choose a date':'Choose a salesman and date')+', then click Show Report.</p>')+'</div>';
-   h.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>{type=b.dataset.type;if(type==='PICKING SHEET'){const t=new Date(Date.now()+86400000);day=new Date(t.getTime()-t.getTimezoneOffset()*60000).toISOString().slice(0,10);}else if(day>localToday())day=localToday();clear();});
+   h.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>{type=b.dataset.type;if(type==='PICKING SHEET'){const t=new Date(Date.now()+86400000);if(t.getDay()===0)t.setDate(t.getDate()+1);day=new Date(t.getTime()-t.getTimezoneOffset()*60000).toISOString().slice(0,10);}else if(day>localToday())day=localToday();clear();});
    if(h.querySelector('#reportSalesman'))h.querySelector('#reportSalesman').onchange=ev=>{man=ev.target.value;clear();};h.querySelector('#reportDate').onchange=ev=>{day=ev.target.value;clear();};
    h.querySelector('#showMobileReport').onclick=async()=>{const id=++ticket;busy=true;selected=null;draw();try {const d=await PortalAPI.report(type,day,(type==='CASH SHEET'||type==='MONTHLY CLOSING'||type==='PICKING SHEET')?'':man);if(id!==ticket)return;if(!d.ok)throw new Error(d.error||'Could not build report.');selected=d;busy=false;draw();}catch(err){if(id!==ticket)return;busy=false;draw();h.querySelector('#mobileReportResult').textContent=err.message||'Could not load report.';}};
    if(selected){
@@ -711,7 +718,16 @@ apply();
  $('loginForm').onsubmit=async ev=>{ev.preventDefault();const button=$('loginSubmit');button.disabled=true;err.textContent='';try {
    const username=$('loginUser').value.trim().toUpperCase(),password=$('loginPassword').value;
    if(setup){if(password.length<6)throw new Error('Choose a password of at least 6 characters.');const salt=hex(crypto.getRandomValues(new Uint8Array(16)));await call('portalSetup',$('setupKey').value.trim(),username,salt,await proof(password,salt));$('setupKey').value='';setup=false;$('setupFields').hidden=true;}
-   if(window.__resumed){session=window.__resumed;window.__resumed=null;}else{const challenge=await call('portalChallenge',username);const unit=$('loginUnit').value;session=await call('portalLogin',username,await proof(password,challenge.salt),unit);window.__rosterP=call('portalRoster',session.token);window.__rosterP.catch(()=>{});try{localStorage.setItem('mahrjanUnit',unit);}catch(e){}try{if(true){const r=await call('portalRemember',session.token);localStorage.setItem('mahrjanDevice',r.key);}else localStorage.removeItem('mahrjanDevice');}catch(e){}}$('loginPassword').value='';button.textContent='Loading reports…';
+   if(window.__resumed){session=window.__resumed;window.__resumed=null;}else{const unit=$('loginUnit').value;
+     // Salt is remembered per username, so a repeat sign-in skips the challenge round trip.
+     let salts={};try{salts=JSON.parse(localStorage.getItem('mahrjanSalt')||'{}')||{};}catch(e){}
+     const fresh=async()=>{const c=await call('portalChallenge',username);salts[username]=c.salt;return c.salt;};
+     try{session=await call('portalLogin',username,await proof(password,salts[username]||await fresh()),unit);}
+     catch(e){if(!salts[username]||!/Incorrect/.test(e.message))throw e;delete salts[username];session=await call('portalLogin',username,await proof(password,await fresh()),unit);}
+     try{localStorage.setItem('mahrjanSalt',JSON.stringify(salts));}catch(e){}
+     window.__rosterP=session.roster?Promise.resolve(session.roster):call('portalRoster',session.token);window.__rosterP.catch(()=>{});delete session.roster;
+     try{localStorage.setItem('mahrjanUnit',unit);}catch(e){}
+     try{if(session.device)localStorage.setItem('mahrjanDevice',session.device);else call('portalRemember',session.token).then(r=>localStorage.setItem('mahrjanDevice',r.key)).catch(()=>{});}catch(e){}}$('loginPassword').value='';button.textContent='Loading reports…';
    window.PortalSession={username:session.username,role:session.role,unit:session.unit,unitName:session.unitName};
    window.PortalAPI={report:async(name,date,man)=>{if(!session)throw new Error('Sign in again.');try{return await call('portalReport',session.token,name,date,man);}catch(e){if(e.message.includes('SESSION_EXPIRED')){restartPortal('Your session expired');}throw e;}}};
    const base=await (window.__rosterP||call('portalRoster',session.token));window.__rosterP=null;
