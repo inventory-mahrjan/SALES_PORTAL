@@ -296,6 +296,17 @@ window.MobileReport = {fmtDate(v){return new Date(v+'T00:00:00').toLocaleDateStr
         // salesman summary: deleted bills sit under collection + expenses, settlement stays on the right
         if (summary && blocks.length === 1 && /DELETED BILLS/.test(blocks[0].html)) { delHtml = blocks[0].html; continue; }
         if (summary && blocks.length === 3) { out.push({ side: blocks }); continue; }
+        // Loading sheet: salesman / manager sign lines sit to the right of the empty-cartons table.
+        if (blocks.length === 1 && String(rows[i][segsOf(i)[0][0] - 1] || '').trim().toUpperCase() === 'EMPTY CARTONS') {
+          const si = signs.find(n => n > i);
+          if (si != null) {
+            used[si] = true;
+            const labs = rows[si].filter(v => !empty(v));
+            out.push('<div style="display:flex;align-items:flex-end;gap:14mm"><div style="flex:none">' + blocks[0].html + '</div>'
+              + '<div style="flex:1;display:flex;gap:14mm;font-weight:700">' + labs.map(v => '<div style="flex:1;border-top:1px solid #5c655f;padding-top:1.5mm">' + esc(v) + '</div>').join('') + '</div></div>');
+            continue;
+          }
+        }
         if (blocks.length === 1) out.push(blocks[0].html);
         else if (blocks[0].boxed) out.push('<div class="row bxrow">' + blocks.map(bk => '<div class="blk">' + bk.html + '</div>').join('') + '</div>');
         else out.push('<div class="row" style="grid-template-columns:' + blocks.map((bk, bi) => 'minmax(max-content,' + (bi === 0 ? 1.7 : 1) + 'fr)').join(' ') + '">' + blocks.map(bk => '<div class="blk">' + bk.html + '</div>').join('') + '</div>');
@@ -307,7 +318,7 @@ window.MobileReport = {fmtDate(v){return new Date(v+'T00:00:00').toLocaleDateStr
         out.push('<div class="ti">' + r.filter(v => !empty(v)).map(esc).join('   ') + '</div>');
         continue;
       }
-      if (signs.includes(i)) { out.push('<div class="sig">' + r.filter(v => !empty(v)).map(v => '<div>' + esc(v) + '</div>').join('') + '</div>'); continue; }
+      if (signs.includes(i)) { if (used[i]) continue; out.push('<div class="sig">' + r.filter(v => !empty(v)).map(v => '<div>' + esc(v) + '</div>').join('') + '</div>'); continue; }
       const bold = (d.bold || []).includes(i);
       out.push('<div class="ln' + (bold ? ' lb' : '') + '">' + r.filter(v => !empty(v)).map(v => '<span>' + esc(typeof v === 'number' ? (money.includes(r.indexOf(v)) ? f2(v) : v) : v) + '</span>').join('') + '</div>');
     }
