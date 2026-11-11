@@ -483,10 +483,10 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const money=v=>v===null||v===undefined?'—':(Math.abs(Number(v))<0.005?0:Number(v)).toLocaleString('en-AE',{minimumFractionDigits:2,maximumFractionDigits:2});
 const nfmt=v=>v==null?'—':Number(v).toLocaleString('en-AE',{maximumFractionDigits:2});
 const dateLabel=v=>new Date(v+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
-const views=[['overview','◫','Overview','Performance overview'],['sales','▤','Sales reports','Sales reports'],['returns','↶','Sales returns','Sales returns'],['customers','♙','Customers','Customer analysis'],['products','□','Products','Product analysis'],['invoices','≡','Invoices','Invoice details'],['operations','▱','Loading & return','Loading & return'],['collections','▥','Collections','Customer collections'],['expenses','▧','Expenses','Route expenses'],['quality','ⓘ','Data & mapping','Data & mapping']];
+const views=[['overview','◫','Overview','Performance overview'],['analysis','▤','Sales analysis','Sales analysis'],['operations','▱','Loading & return','Loading & return'],['collections','▥','Collections','Customer collections'],['expenses','▧','Expenses','Route expenses'],['quality','ⓘ','Data & mapping','Data & mapping']];
 views.splice(1,0,['reports','▤','Daily Sheets','Daily Sheets']);views.push(['vanlog','','Van log','Van log']);if(window.PortalSession&&PortalSession.role==='ADMIN')views.push(['users','','Users','User management']);if(window.PortalSession&&['ADMIN','ACCOUNTANT','VIEWER'].includes(String(PortalSession.role||'').toUpperCase()))views.push(['petty','','Petty cash','Petty cash']);if(window.PortalSession&&['ADMIN','ACCOUNTANT','RECEIVER','SUPERVISOR','VIEWER'].includes(String(PortalSession.role||'').toUpperCase()))views.push(['shortexcess','','Short & excess','Short & excess']);views.push(['vanday','','Daily dashboard','Daily dashboard']);views.push(['writeoff','','FOC & write-offs','FOC & write-offs']);views.push(['qtysales','','Qty by salesman','Salesman sales qty']);
 let view='overview',f={},page=1,sortKey='',sortDir=1,columns=[],tableRows=[],visible=new Set(),signature='',printing=false;
-const tabFilters={overview:['group'],sales:['customer','product','tender','group'],returns:['customer','product','tender','group'],customers:['customer','tender'],products:['product','tender'],invoices:['customer','product','tender','transaction'],operations:['product'],vanlog:['route'],collections:['customer','payment'],expenses:['expenseType']};
+const tabFilters={overview:['group'],analysis:['customer','product','transaction','tender','show'],sales:['customer','product','tender','group'],returns:['customer','product','tender','group'],customers:['customer','tender'],products:['product','tender'],invoices:['customer','product','tender','transaction'],operations:['product'],vanlog:['route'],collections:['customer','payment'],expenses:['expenseType']};
 const tabState={};
 // Use the existing User-based selector in the former route-filter position.
 const salesmanFilterLabel=$('salesman').closest('label');
@@ -495,29 +495,51 @@ $('route').closest('label').before(salesmanFilterLabel);
 
 let overviewFiltersOpen=false;
 $('reportFilterToggle').onclick=()=>{overviewFiltersOpen=!overviewFiltersOpen;$('filters').hidden=!overviewFiltersOpen;$('reportFilterToggle').setAttribute('aria-expanded',String(overviewFiltersOpen));};
-for(const [id,label] of [['payment','Payment mode'],['expenseType','Expense type'],['transaction','Transaction type']]){const el=document.createElement('label');el.textContent=label;const select=document.createElement('select');select.id=id;el.append(select);document.querySelector('.filter-secondary').append(el);}
-const filterKeys=['salesman','from','to','route','customer','product','tender','group','payment','expenseType','transaction'];
+for(const [id,label] of [['payment','Payment mode'],['expenseType','Expense type'],['transaction','Filter type'],['show','Show']]){const el=document.createElement('label');el.textContent=label;const select=document.createElement('select');select.id=id;el.append(select);document.querySelector('.filter-secondary').append(el);}
+const filterKeys=['salesman','from','to','route','customer','product','tender','group','payment','expenseType','transaction','show'];
 function opts(id,pairs,all){$(id).innerHTML=`<option value="">${esc(all)}</option>`+pairs.map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('');}
 opts('salesman',[...M.roster.map(n=>[n,n]),['STORE SALE','STORE SALE']],'All salesmen');
 opts('route',C.unique(M.logs.map(r=>r.route)).sort().map(x=>[x,x]).concat([['Unlinked','Unlinked route']]),'All routes');
 opts('customer',[...new Map(M.sales.map(r=>[r.customer,`${r.customerName} · ${r.customer}`])).entries()].sort((a,b)=>a[1].localeCompare(b[1])),'All customers');
-opts('product',[...new Map(M.sales.concat(M.board).map(r=>[r.product,`${r.productName} · ${r.product}`])).entries()].sort((a,b)=>a[1].localeCompare(b[1])),'All products');
+opts('product',[...new Map(M.sales.concat(M.board).map(r=>[r.product,`${r.productName} · ${r.product}`])).entries()].sort((a,b)=>a[1].localeCompare(b[1])),'All items');
 opts('tender',C.unique(M.sales.map(r=>r.tender)).sort().map(x=>[x,x]),'All tenders');
 opts('payment',C.unique(M.collections.map(r=>r['MODE OF PAYMENT'])).sort().map(x=>[x,x]),'All payment modes');
 opts('expenseType',C.unique(M.expenses.map(r=>r.TYPE)).sort().map(x=>[x,x]),'All expense types');
-opts('transaction',[['CR','Sales'],['SR','Sales returns']],'Sales and returns');
+opts('transaction',[['CR','Sales'],['SR','Sales returns'],['NET','Net sales']],'Sales and sales returns');opts('show',[['item','Item'],['customer','Customer'],['invoice','Invoice']],'Salesman');$('tender').closest('label').before($('transaction').closest('label'));salesmanFilterLabel.firstChild.textContent='Salesman';$('product').closest('label').firstChild.textContent='Items';SAcombo();
 const dates=MAHRJAN_DATA['RAW SALES'].map(r=>r['Tran Date']).filter(Boolean).sort();if(!dates.length)dates.push(localToday());const startDay=(MAHRJAN_DATA.meta&&MAHRJAN_DATA.meta.days>1)?dates[0]:dates.at(-1);$('from').value=startDay;$('to').value=dates.at(-1);
-const navGroups=[['Summary',['overview','vanday']],['Reports',['reports','petty','shortexcess','writeoff','qtysales']],['Analysis',['sales','returns','customers','products','invoices','operations','vanlog','collections','expenses']],['Admin',['users','quality']]];$('nav').innerHTML=navGroups.map(([g,ids])=>{const items=ids.map(id=>views.find(v=>v[0]===id)).filter(Boolean);return items.length?'<div class="navlabel">'+g+'</div>'+items.map(([id,icon,label])=>'<button data-view="'+id+'" class="'+(id===view?'active':'')+'">'+label+'</button>').join(''):'';}).join('');
+const navGroups=[['Summary',['overview','vanday']],['Reports',['reports','petty','shortexcess','writeoff','qtysales']],['Analysis',['analysis','operations','vanlog','collections','expenses']],['Admin',['users','quality']]];$('nav').innerHTML=navGroups.map(([g,ids])=>{const items=ids.map(id=>views.find(v=>v[0]===id)).filter(Boolean);return items.length?'<div class="navlabel">'+g+'</div>'+items.map(([id,icon,label])=>'<button data-view="'+id+'" class="'+(id===view?'active':'')+'">'+label+'</button>').join(''):'';}).join('');
 function defaults(){return Object.fromEntries(filterKeys.map(k=>[k,k==='from'?startDay:k==='to'?dates.at(-1):k==='group'?'salesman':'']));}
+// Searchable lists for Salesman, Customer and Items. In Sales analysis each list only offers what exists for the
+// chosen dates and the other filters (dependent dropdowns); a choice that no longer fits is cleared.
+function SAallowed(id){if(view!=='analysis')return null;const g=k=>$(k).value,F=g('from'),T=g('to'),tr=g('transaction'),td=g('tender');
+ const out=new Set();for(const r of M.sales){if(r.flagged||(F&&r.date<F)||(T&&r.date>T))continue;if(td&&r.tender!==td)continue;if(tr==='SR'?r.type!=='SR':tr==='CR'?r.type==='SR':false)continue;
+  if(id!=='salesman'&&g('salesman')&&r.salesman!==g('salesman'))continue;if(id!=='customer'&&g('customer')&&r.customer!==g('customer'))continue;if(id!=='product'&&g('product')&&r.product!==g('product'))continue;
+  out.add(id==='salesman'?r.salesman:id==='customer'?r.customer:r.product);}return out;}
+function SAtidy(){if(view!=='analysis')return;let again=true,n=0;while(again&&n++<3){again=false;for(const id of ['salesman','customer','product']){const v=$(id).value;if(v&&!SAallowed(id).has(v)){$(id).value='';again=true;}}}SAsync();}
+function SAsync(){for(const id of ['salesman','customer','product']){const i=document.getElementById(id+'Find');if(i&&document.activeElement!==i){const o=$(id).selectedOptions[0];i.value=o&&o.value?o.textContent:'';i.placeholder=$(id).options[0]?$(id).options[0].textContent:'';}}}
+function SAcombo(){
+ if(!document.getElementById('saStyle')){const st=document.createElement('style');st.id='saStyle';st.textContent='.sa-combo{position:relative;display:block}.sa-combo input{width:100%}.sa-combo ul{position:absolute;z-index:40;left:0;right:0;top:100%;margin:3px 0 0;padding:4px;list-style:none;background:#fff;border:1px solid #cfd6d4;border-radius:6px;max-height:260px;overflow:auto;box-shadow:0 6px 20px rgba(0,0,0,.1)}.sa-combo li{padding:6px 8px;border-radius:4px;cursor:pointer;font-size:13px;white-space:normal}.sa-combo li:hover,.sa-combo li.hl{background:#eef3f2}.sa-combo li.none{color:#888;cursor:default}tr.sa-total td{font-weight:700;background:#f3f6f5;border-top:2px solid #0b3b3e}';document.head.append(st);}
+ for(const id of ['salesman','customer','product']){const sel=$(id);if(document.getElementById(id+'Find'))continue;
+  const wrap=document.createElement('span');wrap.className='sa-combo';const inp=document.createElement('input');inp.id=id+'Find';inp.type='search';inp.autocomplete='off';const ul=document.createElement('ul');ul.hidden=true;
+  wrap.append(inp,ul);sel.before(wrap);sel.style.display='none';let hl=-1;
+  const list=()=>{const q=inp.value.trim().toLowerCase(),ok=SAallowed(id);return [...sel.options].filter((o,i)=>i===0||((!ok||ok.has(o.value))&&(!q||o.textContent.toLowerCase().includes(q))));};
+  const draw=()=>{const L=list();ul.innerHTML=L.length>1||!inp.value.trim()?L.map((o,i)=>`<li data-v="${esc(o.value)}" class="${i===hl?'hl':''}">${esc(o.textContent)}</li>`).join(''):'<li class="none">No match</li>';};
+  const pick=v=>{sel.value=v;ul.hidden=true;inp.blur();sel.dispatchEvent(new Event('change',{bubbles:true}));SAtidy();};
+  inp.onfocus=()=>{inp.select();hl=-1;ul.hidden=false;draw();};inp.oninput=()=>{hl=-1;draw();};
+  inp.onkeydown=e=>{const lis=ul.querySelectorAll('li[data-v]');if(e.key==='ArrowDown'){hl=Math.min(hl+1,lis.length-1);draw();e.preventDefault();}else if(e.key==='ArrowUp'){hl=Math.max(hl-1,0);draw();e.preventDefault();}else if(e.key==='Enter'){e.preventDefault();if(lis[hl])pick(lis[hl].dataset.v);}else if(e.key==='Escape'){inp.blur();}};
+  ul.onmousedown=e=>{const li=e.target.closest('li[data-v]');if(li){e.preventDefault();pick(li.dataset.v);}};
+  inp.onblur=()=>setTimeout(()=>{ul.hidden=true;SAsync();},150);}
+ $('filters').addEventListener('change',e=>{if(e.target&&['from','to','tender','transaction'].includes(e.target.id))SAtidy();});
+ SAsync();}
 function configureFilters(){const supported=tabFilters[view]||[];for(const id of filterKeys){const common=['salesman','from','to'].includes(id);$(id).closest('label').hidden=!common&&!supported.includes(id);$(id).disabled=!common&&!supported.includes(id);}
  const customers=view==='collections'?M.collections:M.sales;
- const previous=$('customer').value;opts('customer',[...new Map(customers.map(r=>[r.customer,`${r.customerName} · ${r.customer}`])).entries()].sort((a,b)=>a[1].localeCompare(b[1])),'All customers');$('customer').value=previous;
+ setTimeout(SAsync,0);const previous=$('customer').value;opts('customer',[...new Map(customers.map(r=>[r.customer,`${r.customerName} · ${r.customer}`])).entries()].sort((a,b)=>a[1].localeCompare(b[1])),'All customers');$('customer').value=previous;
 }
 function readFilters(){const allowed=['salesman','from','to',...(tabFilters[view]||[])];return Object.fromEntries(filterKeys.map(k=>[k,allowed.includes(k)?$(k).value:k==='group'?'salesman':'']));}
 function apply(){const next=readFilters();if(!next.from||!next.to||next.from>next.to){$('filterStatus').textContent='Select a valid From and To date range.';return false;}f=next;tabState[view]={...f};page=1;$('filterStatus').textContent='';render();return true;}
 $('filters').onsubmit=e=>{e.preventDefault();apply();};
 $('filters').onchange=()=>{$('filterStatus').textContent='Filters changed. Select Search reports to apply.';};
-$('reset').onclick=()=>{for(const [id,val] of Object.entries(defaults()))$(id).value=val;$('tableSearch').value='';apply();};
+$('reset').onclick=()=>{for(const [id,val] of Object.entries(defaults()))$(id).value=val;$('tableSearch').value='';SAsync();apply();};
 $('nav').onclick=e=>{const b=e.target.closest('[data-view]');if(!b)return;view=b.dataset.view;page=1;sortKey='';$('tableSearch').value='';$('filterStatus').textContent='';configureFilters();f={...(tabState[view]||defaults())};for(const id of filterKeys)$(id).value=f[id]||'';render();};
 function card(label,value,foot,featured=false,currency=false){return `<article class="card ${featured?'featured':''}"><div class="card-label">${esc(label)}</div><div class="card-value">${currency&&value!==null?'<small>AED</small>':''}${esc(value===null?'Not available':value)}</div><div class="card-foot">${esc(foot)}</div></article>`;}
 function render(){
@@ -544,7 +566,7 @@ function render(){
    MahrjanReports.render(view);return;
  }
  MahrjanReports.hide();['context','notice'].forEach(id=>$(id).hidden=false);
- const rows=C.filter(M,f).filter(r=>!f.transaction||r.type===f.transaction),s=C.stats(rows),collectionBlocked=!!(f.product||f.tender),expenseBlocked=!!(f.customer||f.product||f.tender);
+ const rows=C.filter(M,f).filter(r=>!f.transaction||f.transaction==='NET'||(f.transaction==='SR'?r.type==='SR':r.type!=='SR')),s=C.stats(rows),collectionBlocked=!!(f.product||f.tender),expenseBlocked=!!(f.customer||f.product||f.tender);
  const collections=M.collections.filter(r=>C.base(r,f)&&(!f.customer||r.customer===f.customer)&&(!f.payment||r['MODE OF PAYMENT']===f.payment));
  const expenses=M.expenses.filter(r=>C.base(r,f)&&(!f.expenseType||r.TYPE===f.expenseType));
  const unknown=rows.filter(r=>r.salesman==='STORE SALE');
@@ -555,7 +577,7 @@ function render(){
  const notes=[];if(unknown.length)notes.push(`${unknown.length} sales lines (AED ${money(C.sum(unknown,'net'))}) are STORE SALE because their User is outside the route salesman roster.`);
  if(collectionBlocked||expenseBlocked)notes.push('Collections or expenses are unavailable for filters their source rows cannot support. No amounts are allocated to products or tenders.');
  $('notice').textContent=notes.join(' ');
- $('cards').innerHTML=card('Net sales',money(s.net),'Sales less sales returns · excl. VAT',true,true)+card('Sales',money(s.sales),`${s.invoices} sales invoices`,false,true)+card('Sales returns',money(s.returns),`${s.returnNotes} return notes`,false,true)+card('Recorded profit',window.MAHRJAN_PROFIT_SOURCE?money(s.profit):null,window.MAHRJAN_PROFIT_SOURCE?(s.profitComplete?'Sales profit less profit of returned goods':'Some lines have no profit value'):'No Profit or Cost column in RAW SALES',false,true)+card('Recorded margin',window.MAHRJAN_PROFIT_SOURCE&&s.margin!==null?nfmt(s.margin)+'%':null,'Recorded profit ÷ net sales')+card('Collections',collectionBlocked?null:money(C.sum(collections,'amount')),collectionBlocked?'Product/tender attribution unavailable':`${collections.length} recorded receipts`,false,true)+card('Expenses',expenseBlocked?null:money(C.sum(expenses,'amount')),expenseBlocked?'Selected filter is not supported':`${expenses.length} recorded expense lines`,false,true)+card('Customers served',nfmt(s.customers),'Distinct customer codes in sales/returns');
+ $('cards').innerHTML=card('Net sales',money(s.net),'Sales less sales returns · excl. VAT',true,true)+card('Sales',money(s.sales),`${s.invoices} sales invoices`+(view==='analysis'?` · ${nfmt(rows.filter(r=>r.type!=='SR').reduce((t,r)=>t+Math.abs(C.num(r.qty)||0),0))} pcs`:''),false,true)+card('Sales returns',money(s.returns),`${s.returnNotes} return notes`+(view==='analysis'?` · ${nfmt(rows.filter(r=>r.type==='SR').reduce((t,r)=>t+Math.abs(C.num(r.qty)||0),0))} pcs`:''),false,true)+card('Recorded profit',window.MAHRJAN_PROFIT_SOURCE?money(s.profit):null,window.MAHRJAN_PROFIT_SOURCE?(s.profitComplete?'Sales profit less profit of returned goods':'Some lines have no profit value'):'No Profit or Cost column in RAW SALES',false,true)+card('Recorded margin',window.MAHRJAN_PROFIT_SOURCE&&s.margin!==null?nfmt(s.margin)+'%':null,'Recorded profit ÷ net sales')+card('Collections',collectionBlocked?null:money(C.sum(collections,'amount')),collectionBlocked?'Product/tender attribution unavailable':`${collections.length} recorded receipts`,false,true)+card('Expenses',expenseBlocked?null:money(C.sum(expenses,'amount')),expenseBlocked?'Selected filter is not supported':`${expenses.length} recorded expense lines`,false,true)+card('Customers served',nfmt(s.customers),'Distinct customer codes in sales/returns');
  $('charts').hidden=!['overview','sales','returns'].includes(view);$('cards').hidden=view==='quality';$('reportPanel').hidden=view==='quality';$('quality').hidden=view!=='quality';
  if(['collections','expenses','operations','vanlog'].includes(view)){
    $('notice').textContent='';const source=view==='collections'?collections:view==='expenses'?expenses:view==='vanlog'?vanRows():C.operations(M,f);
@@ -601,6 +623,25 @@ function buildTable(rows,collections,expenses,collectionBlocked,expenseBlocked){
  tableRows=C.aggregate(source,group).map(g=>({...g,code:g.label,label:group==='customer'?g.rows[0].customerName:group==='product'?g.rows[0].productName:g.label,profit:g.profitComplete?g.profit:null,margin:g.profitComplete?g.margin:null,saleQty:C.unique(g.rows.map(r=>r.unit)).length===1?C.sum(g.rows.filter(r=>r.type!=='SR'),'qty'):null,returnQty:C.unique(g.rows.map(r=>r.unit)).length===1?-C.sum(g.rows.filter(r=>r.type==='SR'),'qty'):null,unit:C.unique(g.rows.map(r=>r.unit)).join(' / ')}));
  title=view==='returns'?'Sales return analysis':labels[group]+' performance';note=view==='returns'?'SR transactions only. Sales returns are separate from physical van returns.':'Amounts exclude VAT. Margin uses summed recorded profit, not averaged row percentages.';
  if(view==='products')note+=' Quantities are shown only when the product uses one source unit.';
+ }else if(view==='analysis'){
+ const ft=f.transaction||'',show=f.show||'salesman',absq=r=>Math.abs(C.num(r.qty)||0);
+ const ftName={CR:'Sales',SR:'Sales returns',NET:'Net sales'}[ft]||'Sales and sales returns';
+ const mcols=ft==='CR'?[col('saleQty','Sales qty (pcs)','number'),col('sales','Sales (AED)','money')]
+  :ft==='SR'?[col('returnQty','Return qty (pcs)','number'),col('returns','Returns (AED)','money')]
+  :ft==='NET'?[col('netQty','Net qty (pcs)','number'),col('net','Net sales (AED)','money')]
+  :[col('saleQty','Sales qty (pcs)','number'),col('sales','Sales (AED)','money'),col('returnQty','Return qty (pcs)','number'),col('returns','Returns (AED)','money'),col('netQty','Net qty (pcs)','number'),col('net','Net sales (AED)','money')];
+ if(show==='invoice'){
+  const grouped=new Map();for(const r of rows){const key=[r.date,r.salesman,r.invoice].join('|');if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(r);}
+  tableRows=[...grouped].map(([key,a])=>{const sr=a[0].type==='SR';return {key,date:a[0].date,invoice:a[0].invoice,salesman:a[0].salesman,customer:a[0].customerName,type:sr?'Return':'Sale',tender:C.unique(a.map(r=>r.tender)).join(', '),lines:a.length,qty:(sr?-1:1)*a.reduce((t,r)=>t+absq(r),0),net:C.sum(a,'net'),vat:C.sum(a,'VAT'),total:C.sum(a,'Net Incl VAT'),rows:a};});
+  columns=[col('date','Date'),col('invoice','Invoice'),col('type','Type'),col('customer','Customer'),col('salesman','Salesman'),col('tender','Tender'),col('lines','Lines','number'),col('qty','Qty (pcs)','number'),col('net','Net excl. VAT','money'),col('vat','VAT','money'),col('total','Incl. VAT','money')];
+  title='Invoice-wise · '+ftName;note='Select an invoice number to see its lines. Sales returns show as minus. Customer/item filters can show part of an invoice.';
+ }else{
+  const field={item:'product',customer:'customer',salesman:'salesman'}[show],labels={item:'Item',customer:'Customer',salesman:'Salesman'};
+  columns=[col('label',labels[show]),...(show==='salesman'?[col('customers','Customers','number')]:[col('code',show==='item'?'Barcode':'Code')]),...mcols,col('profit','Recorded profit','money'),col('margin','Margin %','percent'),...(ft==='SR'?[]:[col('invoices','Sales invoices','number')])];
+  tableRows=C.aggregate(rows,field).map(g=>{const sq=g.rows.filter(r=>r.type!=='SR').reduce((t,r)=>t+absq(r),0),rq=g.rows.filter(r=>r.type==='SR').reduce((t,r)=>t+absq(r),0);
+   return {...g,code:g.label,label:show==='customer'?g.rows[0].customerName:show==='item'?g.rows[0].productName:g.label,customers:C.unique(g.rows.filter(r=>r.type!=='SR').map(r=>r.customer)).length,saleQty:sq,returnQty:rq,netQty:sq-rq,profit:g.profitComplete?g.profit:null,margin:g.profitComplete?g.margin:null};});
+  title=labels[show]+'-wise · '+ftName;note='Qty in pcs · amounts in AED excluding VAT. Margin uses summed recorded profit.';
+ }
  }else if(view==='invoices'){
  const grouped=new Map();for(const r of rows){const key=[r.date,r.salesman,r.invoice].join('|');if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(r);}
  tableRows=[...grouped].map(([key,a])=>({key,date:a[0].date,invoice:a[0].invoice,salesman:a[0].salesman,customer:a[0].customerName,type:a[0].type,tender:C.unique(a.map(r=>r.tender)).join(', '),net:C.sum(a,'net'),vat:C.sum(a,'VAT'),total:C.sum(a,'Net Incl VAT'),lines:a.length,rows:a}));
@@ -624,7 +665,8 @@ function format(r,c){const v=r[c.key];return v==null?'—':c.format==='money'?mo
 function renderTable(){
  const a=displayed(),size=+$('pageSize').value,total=Math.max(1,Math.ceil(a.length/size));page=Math.min(page,total);const shown=printing?a:a.slice((page-1)*size,page*size),cols=columns.filter(c=>visible.has(c.key));
  $('thead').innerHTML='<tr>'+cols.map(c=>`<th class="${c.format!=='text'?'num':''}" aria-sort="${sortKey===c.key?(sortDir===1?'ascending':'descending'):'none'}"><button data-sort="${c.key}">${esc(c.label)}${sortKey===c.key?`<span class="sort-mark">${sortDir===1?'↑':'↓'}</span>`:''}</button></th>`).join('')+'</tr>';
- $('tbody').innerHTML=shown.length?shown.map(r=>'<tr>'+cols.map(c=>`<td class="${c.format!=='text'?'num':''}">${view==='invoices'&&c.key==='invoice'?`<button class="table-link" data-invoice="${esc(r.key)}">${esc(r.invoice)}</button>`:esc(format(r,c))}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}" class="empty">No matching records. Adjust the report filters or table search.</td></tr>`;
+ $('tbody').innerHTML=shown.length?shown.map(r=>'<tr>'+cols.map(c=>`<td class="${c.format!=='text'?'num':''}">${(view==='invoices'||(view==='analysis'&&f.show==='invoice'))&&c.key==='invoice'?`<button class="table-link" data-invoice="${esc(r.key)}">${esc(r.invoice)}</button>`:esc(format(r,c))}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}" class="empty">No matching records. Adjust the report filters or table search.</td></tr>`;
+ if(view==='analysis'&&a.length){const tot=c=>a.reduce((t,r)=>t+(typeof r[c.key]==='number'?r[c.key]:0),0);$('tbody').innerHTML+='<tr class="sa-total">'+cols.map((c,i)=>`<td class="${c.format!=='text'?'num':''}">${i===0?'TOTAL ('+a.length+')':(c.format==='money'||(c.format==='number'&&/qty|Qty/.test(c.key)))?esc(format({[c.key]:tot(c)},c)):''}</td>`).join('')+'</tr>';}
  $('resultCount').textContent=`${a.length} results`;$('pageInfo').textContent=a.length?`${(page-1)*size+1}–${Math.min(page*size,a.length)} of ${a.length} · Page ${page} of ${total}`:'0 results';$('prev').disabled=page===1;$('next').disabled=page===total;
 }
 $('tableSearch').oninput=()=>{page=1;renderTable();};$('pageSize').onchange=()=>{page=1;renderTable();};$('prev').onclick=()=>{page--;renderTable();};$('next').onclick=()=>{page++;renderTable();};
