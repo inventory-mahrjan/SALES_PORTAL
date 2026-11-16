@@ -932,7 +932,7 @@ apply();
  /* ===== OFFICE ENTRY: admin / accountant correct one salesman's day (Board, Return, Expense, Collection, Delete bill).
   * Pull shows what is in the sheet; edit / add / remove lines; Post replaces that salesman's day for that module.
   * Admin: today + 4 days back. Accountant: today + 2 days back. Older days are view-only. */
- window.OfficeView=(()=>{let host,init=null,initMsg='',date='',mod='BOARD',sm='',data=null,orig=null,lines=[],head={},msg='',busy=false,pulled=false,dups=null,status='',stTimer=null,posted=null,resendMsg='';
+ window.OfficeView=(()=>{let host,init=null,initMsg='',date='',mod='BOARD',sm='',data=null,orig=null,lines=[],head={},msg='',busy=false,pulled=false,dups=null,status='',stTimer=null,posted=null,resendMsg='',rsBusy=false,rsDate='',rsTimer=null;
    const MODS=[['BOARD','Board'],['RETURN','Return'],['EXPENSE','Expense'],['COLLECTION','Collection'],['DELETE','Delete bill']];
    const EXPT=[['FUEL','Fuel'],['PARKING','Parking'],['CREDIT NOTE','Credit note'],['SHELF RENT','Shelf rent'],['OTHER','Other']];
    const R=['good','dmg','exp','wst','foc'],RL={good:'Good',dmg:'Damage',exp:'Expiry',wst:'Waste',foc:'FOC'};
@@ -1001,7 +1001,7 @@ apply();
           +(ch.length?'<div style="margin-top:12px;border:1px solid #efd98a;background:#fffbea;border-radius:10px;padding:10px 14px;font-size:13px;color:#7a5a00"><b>Not posted yet — '+ch.length+' change'+(ch.length===1?'':'s')+':</b><div style="white-space:pre-line;margin-top:4px;font-family:\'IBM Plex Mono\',monospace;font-size:12px">'+escH(ch.slice(0,30).join('\n'))+(ch.length>30?'\n…':'')+'</div></div>':'<p style="font-size:12px;color:var(--muted);margin-top:10px">Change, add or remove lines, then Post. A post replaces '+escH(sm)+'\'s '+escH(MODS.find(m=>m[0]===mod)[1].toLowerCase())+' for '+escH(longDate(date))+' only.</p>'):'')
         +(dups?'<div style="margin-top:12px;border:1px solid #f0c2b8;background:#fdf0ee;border-radius:10px;padding:10px 14px;font-size:13px"><b>Already collected before:</b><div>'+dups.map(d=>escH(d.invoice+' · '+(d.date||'')+' · '+(d.salesman||'')+' · '+money(d.amount))).join('<br>')+'</div><button type="button" class="primary" data-dupok style="margin-top:8px">Post anyway</button></div>':'')
         +(posted&&posted.date===date&&posted.sm===sm&&posted.mod===mod?'<div style="margin-top:18px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fafaf8"><div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px">After posting</div>'
-          +'<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px"><span>Re-send emails for '+escH(longDate(date))+':</span><label style="display:inline-flex;flex-direction:row;gap:6px;align-items:center;font-size:13px;color:inherit"><input type="checkbox" data-rs-night checked style="width:16px;height:16px;margin:0;flex:none"> Night reports</label><label style="display:inline-flex;flex-direction:row;gap:6px;align-items:center;font-size:13px;color:inherit"><input type="checkbox" style="width:16px;height:16px;margin:0;flex:none" data-rs-van'+(posted.mod==='BOARD'?' checked':'')+'> Van load report</label><button type="button" data-resend>Re-send</button>'
+          +'<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px"><span>Re-send emails for '+escH(longDate(date))+':</span><label style="display:inline-flex;flex-direction:row;gap:6px;align-items:center;font-size:13px;color:inherit"><input type="checkbox" data-rs-night checked style="width:16px;height:16px;margin:0;flex:none"> Night reports</label><label style="display:inline-flex;flex-direction:row;gap:6px;align-items:center;font-size:13px;color:inherit"><input type="checkbox" style="width:16px;height:16px;margin:0;flex:none" data-rs-van'+(posted.mod==='BOARD'?' checked':'')+'> Van load report</label><button type="button" data-resend'+(rsBusy?' disabled':'')+'>'+(rsBusy?'Queued…':'Re-send')+'</button>'
           +(posted.mod==='BOARD'||posted.mod==='RETURN'?'<span style="flex:1"></span><button type="button" data-itrade="'+(posted.mod==='BOARD'?'LOADING':'RETURN')+'">Download iTrade file ('+(posted.mod==='BOARD'?'loading':'return')+')</button>':'')+'</div>'
           +(resendMsg?'<p style="font-size:12.5px;color:var(--muted);margin:8px 0 0">'+escH(resendMsg)+'</p>':'')+'</div>':'')
        :(I?'<p style="font-size:13px;color:var(--muted)">Choose the date, module and salesman, then Pull.</p>':(initMsg?'':Skel(0,4,5))));
@@ -1030,7 +1030,10 @@ apply();
      // Same values as posted, so "changes" stays empty right after a pull.
      orig.lines=JSON.parse(JSON.stringify(lines));orig.head=Object.assign({},head);
      if(!lines.length&&r.editable)lines.push(blank());pulled=true;dups=null;draw();}
-   async function pull(){busy=true;msg='';pulled=false;draw();try{const r=await call('portalOfficePull',session.token,mod,date,sm);busy=false;setFrom(r);}catch(e){busy=false;msg=err(e);draw();}}
+   async function pull(){busy=true;msg='';pulled=false;draw();try{const r=await call('portalOfficePull',session.token,mod,date,sm);busy=false;
+       if(r.today){init.today=r.today;init.from=r.from;init.days=r.days||init.days;}
+       if(r.lists&&r.lists.items)init.items=r.lists.items;if(r.lists&&r.lists.customers){init.customers=r.lists.customers;init.custFor=String(sm).toUpperCase();}
+       setFrom(r);}catch(e){busy=false;msg=err(e);draw();}}
    function payload(dupOk){const d={lines:lines.filter(l=>mod==='DELETE'?String(l.invoice).trim():true),allowDup:!!dupOk};Object.assign(d,head);return d;}
    function check(){if(mod==='BOARD'||mod==='RETURN'){if(!/^\d{1,5}$/.test(String(head.van||'').trim()))return 'Vehicle: numbers only, max 5 digits.';
        if(String(head.time||'').trim()&&!/^\d{1,2}:\d{2}$/.test(String(head.time).trim()))return 'Time as HH:MM, e.g. 06:45.';
@@ -1038,7 +1041,9 @@ apply();
        const seen={},dup=lines.filter(l=>l.code&&(seen[l.code]=(seen[l.code]||0)+1)===2);if(dup.length)return 'Same item twice: '+dup.map(l=>itemName(l.code)).join(', ')+'. Put it on one line.';
        if(mod==='RETURN'&&(String(head.small??'')===''||String(head.big??'')===''))return 'Enter carton small and carton big (0 if none).';}
      if(mod==='EXPENSE'){const m=lines.find(l=>(l.type==='SHELF RENT'||l.type==='CREDIT NOTE')&&num(l.amount)>0&&!String(l.customer||'').trim());if(m)return (m.type==='SHELF RENT'?'Shelf rent':'Credit note')+' needs the customer.';}
-     if(mod==='COLLECTION'){const m=lines.find(l=>num(l.amount)>0&&!String(l.invoice||'').trim());if(m)return 'Each collection needs the invoice number.';}
+     if(mod==='COLLECTION'){const m=lines.find(l=>num(l.amount)>0&&!String(l.invoice||'').trim());if(m)return 'Each collection needs the invoice number.';
+       const rk=v=>String(v??'').trim().replace(/^0+(?=\d)/,''),seenR={},twice=[...new Set(lines.filter(l=>num(l.amount)>0&&rk(l.tran)).map(l=>rk(l.tran)).filter(k=>(seenR[k]=(seenR[k]||0)+1)===2))];
+       if(twice.length)return 'One receipt = one invoice. Receipt '+twice.join(', ')+' is on more than one line.';}
      return '';}
    async function post(dupOk){const c=check();if(c){msg=c;draw();return;}const ch=changes();
      const lost=(mod==='BOARD'&&!lines.some(l=>l.code&&num(l.qty)>0))?'\n\nThis removes the whole board for the day.':'';
@@ -1051,12 +1056,30 @@ apply();
      catch(e){busy=false;msg='Not posted: '+err(e)+' Your lines are still on screen.';draw();}}
    function watch(){clearTimeout(stTimer);let n=0;const tick=async()=>{if(!host||host.hidden)return;try{const r=await call('portalOfficeStatus',session.token);if(!r.pendingFrom){status='VAN STOCK and reports updated ✓';draw();return;}status='Rebuilding VAN STOCK from '+longDate(r.pendingFrom)+' to today…';draw();}catch(e){}if(++n<40)stTimer=setTimeout(tick,15000);};stTimer=setTimeout(tick,15000);}
    async function resend(){const night=host.querySelector('[data-rs-night]').checked,van=host.querySelector('[data-rs-van]').checked;if(!night&&!van){resendMsg='Tick at least one report.';draw();return;}
-     try{await call('portalOfficeResend',session.token,date,night,van);resendMsg='Queued — the emails go out within 5 minutes with "(CORRECTED)" in the subject. Best after "VAN STOCK and reports updated ✓".';}catch(e){resendMsg=err(e);}draw();}
+     if(rsBusy)return;rsBusy=true;draw();
+     try{let r=await call('portalOfficeResend',session.token,date,night,van,false);
+       if(r&&r.sentAt&&!r.queued){if(!confirm('The emails for '+longDate(date)+' were already re-sent at '+r.sentAt+'.\n\nSend them again?')){rsBusy=false;resendMsg='Not sent again. Last re-sent at '+r.sentAt+'.';draw();return;}
+         r=await call('portalOfficeResend',session.token,date,night,van,true);}
+       rsDate=date;resendMsg=r&&r.already?'Already queued — only one email will go.':'Queued — the emails go out within 5 minutes with "(CORRECTED)" in the subject.';draw();rsWatch();}
+     catch(e){rsBusy=false;resendMsg=err(e);draw();}}
+   // Button stays locked until Daily Check has sent the emails, then shows the time.
+   function rsWatch(){clearTimeout(rsTimer);let n=0;const tick=async()=>{try{const r=await call('portalOfficeStatus',session.token,rsDate);const st=r.resend||{};
+       if(!st.queued){rsBusy=false;resendMsg=st.sentAt?'Re-sent at '+st.sentAt+' ✓':'Sent.';if(host&&!host.hidden)draw();return;}}catch(e){}
+       if(++n<30)rsTimer=setTimeout(tick,20000);else{rsBusy=false;resendMsg='Still waiting for Daily Check — check its Executions (officeResendTick).';if(host&&!host.hidden)draw();}};rsTimer=setTimeout(tick,20000);}
    async function itrade(kind){try{const r=await call('portalITrade',session.token,kind,date,sm);const bin=atob(r.b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
        const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u],{type:'application/zip'}));a.download=r.name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);resendMsg='Downloaded '+r.name+'.';}catch(e){resendMsg=err(e);}draw();}
-   async function load(){if(!init){initMsg='';draw();try{init=await call('portalOfficeInit',session.token);if(!date)date=init.today;}catch(e){initMsg=err(e);}}draw();}
+   // Opens at once: dates from the login role and the work day (Dubai time − 2 h, same as the sheet), salesmen from the
+   // list the portal loaded at sign-in. Items / customers come with the first Pull.
+   const workDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dubai'}).format(new Date(Date.now()-120*60000));
+   const addD=(d,n)=>{const x=new Date(d+'T12:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10);};
+   async function load(){if(!init){const role=String(session.role||'').toUpperCase(),days=role==='ADMIN'?5:3,t=workDay();
+       init={role,unit:session.unit,today:t,from:addD(t,-(days-1)),days,men:[],items:[],customers:[],custFor:''};if(!date)date=t;
+       let ros=(window.MAHRJAN_DATA&&MAHRJAN_DATA.roster)||[];
+       if(!ros.length){initMsg='';draw();try{ros=(await call('portalRoster',session.token)).roster||[];}catch(e){initMsg=err(e);}}
+       init.men=ros.map(m=>({name:m.name,route:m.route||''})).filter(m=>m.name);}
+     draw();}
    window.addEventListener('beforeunload',e=>{if(pulled&&changes().length){e.preventDefault();e.returnValue='';}});
-   return {render(){load();},hide(){if(host)host.hidden=true;clearTimeout(stTimer);},reset(){init=null;data=null;pulled=false;lines=[];date='';sm='';msg='';status='';posted=null;if(host)host.hidden=true;}};
+   return {render(){load();},hide(){if(host)host.hidden=true;clearTimeout(stTimer);},reset(){init=null;data=null;pulled=false;lines=[];date='';sm='';msg='';status='';posted=null;rsBusy=false;rsDate='';clearTimeout(rsTimer);resendMsg='';if(host)host.hidden=true;}};
  })();
  /* Shared A4 print for the summary reports. sections: [{h, cols:[[label,align]], rows:[[...]], total:[...]}] */
  window.SimplePrint=(file,title,sub,sections,signs)=>{const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const logo=(document.querySelector('img[src*="data:image"]')||{}).src||'';
